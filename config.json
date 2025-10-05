@@ -1,0 +1,24 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 8080,
+    "tls": {
+      "enabled": true,
+      "keyStore": "keystore.jks",
+      "trustStore": "truststore.jks"
+    }
+  },
+  "app": {
+    "users": ["alice", "bob", "carol"],
+    "features": [
+      {"name": "login", "enabled": true},
+      {"name": "payments", "enabled": false}
+    ]
+  },
+  "database": {
+    "connections": [
+      {"url": "jdbc:mysql://localhost/db1", "user": "root"},
+      {"url": "jdbc:mysql://localhost/db2", "user": "admin"}
+    ]
+  }
+}

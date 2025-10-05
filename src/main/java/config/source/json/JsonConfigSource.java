@@ -1,285 +1,186 @@
 package config.source.json;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import config.source.ConfigSource;
+import config.source.AbstractConfigSource;
+import config.source.KeyPathResolvers;
 
-public class JsonConfigSource implements ConfigSource<JsonNode> {
+public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
 
-  private final ObjectMapper mapper = new ObjectMapper();
-  private final ObjectNode root;
+  private final JsonNodeFactory factory = JsonNodeFactory.instance;
 
   public JsonConfigSource(ObjectNode root) {
-    this.root = root;
-  }
-
-  public JsonConfigSource(String json) throws Exception {
-    JsonNode node = this.mapper.readTree(json);
-    if (!node.isObject()) {
-      throw new IllegalArgumentException("Root must be JSON object");
-    }
-    this.root = (ObjectNode) node;
+    super(root, KeyPathResolvers.DOT);
   }
 
   @Override
-  public JsonNode source() {
-    return this.root.deepCopy();
+  public Object getRaw(String key) {
+    JsonNode node = this.getNodeByPath(this.normalizeKey(key));
+    return this.convertJsonNode(node);
   }
 
-  private JsonNode getNode(String key) {
-    String[] parts = key.split("\\.");
-    JsonNode current = this.root;
-    for (String part : parts) {
-      if (current == null || !current.has(part)) {
-        return null;
-      }
-      current = current.get(part);
-    }
-    return current;
+  @Override
+  public Object getRaw(String key, Object defaultValue) {
+    Object value = this.getRaw(key);
+    return value != null ? value : defaultValue;
   }
 
-  private ObjectNode ensureParentNode(String key) {
-    String[] parts = key.split("\\.");
-    ObjectNode current = this.root;
+  @Override
+  public void setRaw(String key, Object value) {
+    String normalized = this.normalizeKey(key);
+    String[] parts = normalized.split("\\.");
+    ObjectNode current = this.source;
 
     for (int i = 0; i < parts.length - 1; i++) {
-      String part = parts[i];
-      JsonNode node = current.get(part);
-      ObjectNode obj;
-
-      if (!(node instanceof ObjectNode)) {
-        obj = this.mapper.createObjectNode();
-        current.set(part, obj);
+      JsonNode child = current.get(parts[i]);
+      if (child == null || !child.isObject()) {
+        ObjectNode newNode = this.factory.objectNode();
+        current.set(parts[i], newNode);
+        current = newNode;
       } else {
-        obj = (ObjectNode) node;
+        current = (ObjectNode) child;
       }
-      current = obj;
     }
 
-    return current;
-  }
-
-
-  private String lastPart(String key) {
-    String[] parts = key.split("\\.");
-    return parts[parts.length - 1];
+    String last = parts[parts.length - 1];
+    if (value == null) {
+      current.remove(last);
+    } else {
+      current.set(last, this.toJsonNode(value));
+    }
   }
 
   @Override
-  public Object get(String key) {
-    JsonNode node = this.getNode(key);
+  public Set<String> keys() {
+    return this.collectKeys("", this.source);
+  }
+
+  private Set<String> collectKeys(String prefix, ObjectNode node) {
+    Set<String> result = new LinkedHashSet<>();
+    Iterator<Map.Entry<String, JsonNode>> iter = node.fields();
+    while (iter.hasNext()) {
+      Map.Entry<String, JsonNode> entry = iter.next();
+      String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+      JsonNode child = entry.getValue();
+      if (child.isObject()) {
+        result.addAll(this.collectKeys(key, (ObjectNode) child));
+      } else if (child.isArray()) {
+        ArrayNode arr = (ArrayNode) child;
+        for (int i = 0; i < arr.size(); i++) {
+          JsonNode elem = arr.get(i);
+          if (elem.isObject()) {
+            result.addAll(this.collectKeys(key + "." + i, (ObjectNode) elem));
+          } else {
+            result.add(key + "." + i);
+          }
+        }
+      } else {
+        result.add(key);
+      }
+    }
+    return result;
+  }
+
+  private JsonNode getNodeByPath(String path) {
+    String[] parts = path.split("\\.");
+    JsonNode current = this.source;
+    for (String part : parts) {
+      if (current == null) {
+        return null;
+      }
+      if (current.isArray()) {
+        int idx = Integer.parseInt(part);
+        current = current.get(idx);
+      } else {
+        current = current.get(part);
+      }
+    }
+    return current;
+  }
+
+  private Object convertJsonNode(JsonNode node) {
     if (node == null || node.isNull()) {
       return null;
     }
     if (node.isValueNode()) {
+      if (node.isTextual()) {
+        return node.asText();
+      }
+      if (node.isInt()) {
+        return node.asInt();
+      }
+      if (node.isLong()) {
+        return node.asLong();
+      }
+      if (node.isDouble()) {
+        return node.asDouble();
+      }
+      if (node.isFloat()) {
+        return node.floatValue();
+      }
+      if (node.isBoolean()) {
+        return node.asBoolean();
+      }
       return node.asText();
     }
-    return node;
-  }
-
-  @Override
-  public void set(String key, Object value) {
-    if (value == null) {
-      throw new IllegalArgumentException("null is not supported, use remove instead");
-    }
-    ObjectNode parent = this.ensureParentNode(key);
-    String last = this.lastPart(key);
-
-    if (value instanceof String s) {
-      parent.put(last, s);
-    } else if (value instanceof Integer i) {
-      parent.put(last, i);
-    } else if (value instanceof Long l) {
-      parent.put(last, l);
-    } else if (value instanceof Double d) {
-      parent.put(last, d);
-    } else if (value instanceof Float f) {
-      parent.put(last, f);
-    } else if (value instanceof Boolean b) {
-      parent.put(last, b);
-    } else if (value instanceof Collection<?> c) {
-      ArrayNode arrayNode = this.mapper.createArrayNode();
-      for (Object o : c) {
-        arrayNode.add(o.toString());
+    if (node.isArray()) {
+      List<Object> list = new ArrayList<>();
+      for (JsonNode elem : node) {
+        list.add(this.convertJsonNode(elem));
       }
-      parent.set(last, arrayNode);
-    } else if (value instanceof Map<?, ?> m) {
-      ObjectNode mapNode = this.mapper.createObjectNode();
-      m.forEach((k, v) -> mapNode.put(k.toString(), v.toString()));
-      parent.set(last, mapNode);
-    } else {
-      parent.putPOJO(last, value);
+      return list;
     }
-  }
-
-
-  @Override
-  public String getString(String key) {
-    Object val = this.get(key);
-    return val != null ? val.toString() : null;
-  }
-
-  @Override
-  public void setString(String key, String value) {
-    this.set(key, value);
-  }
-
-
-  @Override
-  public Integer getInt(String key) {
-    Object val = this.get(key);
-    return val != null ? Integer.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setInt(String key, int value) {
-    this.set(key, value);
-  }
-
-
-  @Override
-  public Long getLong(String key) {
-    Object val = this.get(key);
-    return val != null ? Long.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setLong(String key, long value) {
-    this.set(key, value);
-  }
-
-  @Override
-  public Double getDouble(String key) {
-    Object val = this.get(key);
-    return val != null ? Double.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setDouble(String key, double value) {
-    this.set(key, value);
-  }
-
-  @Override
-  public Float getFloat(String key) {
-    Object val = this.get(key);
-    return val != null ? Float.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setFloat(String key, float value) {
-    this.set(key, value);
-  }
-
-
-  @Override
-  public Boolean getBoolean(String key) {
-    Object val = this.get(key);
-    return val != null ? Boolean.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setBoolean(String key, boolean value) {
-    this.set(key, value);
-  }
-
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public <E> Collection<E> getCollection(String key) {
-    JsonNode node = this.getNode(key);
-    if (node == null || !node.isArray()) {
-      return List.of();
+    if (node.isObject()) {
+      Map<String, Object> map = new LinkedHashMap<>();
+      node.fields().forEachRemaining(e -> map.put(e.getKey(), this.convertJsonNode(e.getValue())));
+      return map;
     }
-    return StreamSupport.stream(node.spliterator(), false).map(JsonNode::asText).map(e -> (E) e)
-        .collect(Collectors.toList());
+    return null;
   }
 
-  @Override
-  public <E> void setCollection(String key, Collection<E> value) {
-    this.set(key, value);
-  }
-
-
-  @Override
-  public <E> List<E> getList(String key) {
-    return new ArrayList<>(this.getCollection(key));
-  }
-
-  @Override
-  public <E> void setList(String key, List<E> value) {
-    this.setCollection(key, value);
-  }
-
-
-  @Override
-  public <E> Set<E> getSet(String key) {
-    return new HashSet<>(this.getCollection(key));
-  }
-
-  @Override
-  public <E> void setSet(String key, Set<E> value) {
-    this.setCollection(key, value);
-  }
-
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public <K, V> Map<K, V> getMap(String key) {
-    JsonNode node = this.getNode(key);
-    if (node == null || !node.isObject()) {
-      return Map.of();
+  private JsonNode toJsonNode(Object value) {
+    if (value == null) {
+      return this.factory.nullNode();
     }
-    ObjectNode obj = (ObjectNode) node;
-    Map<K, V> map = new HashMap<>();
-    obj.fields()
-        .forEachRemaining(entry -> map.put((K) entry.getKey(), (V) entry.getValue().asText()));
-    return map;
+    if (value instanceof String s) {
+      return this.factory.textNode(s);
+    }
+    if (value instanceof Integer i) {
+      return this.factory.numberNode(i);
+    }
+    if (value instanceof Long l) {
+      return this.factory.numberNode(l);
+    }
+    if (value instanceof Double d) {
+      return this.factory.numberNode(d);
+    }
+    if (value instanceof Float f) {
+      return this.factory.numberNode(f);
+    }
+    if (value instanceof Boolean b) {
+      return this.factory.booleanNode(b);
+    }
+    if (value instanceof Map<?, ?> map) {
+      ObjectNode node = this.factory.objectNode();
+      map.forEach((k, v) -> node.set(k.toString(), this.toJsonNode(v)));
+      return node;
+    }
+    if (value instanceof List<?> list) {
+      ArrayNode arr = this.factory.arrayNode();
+      for (Object elem : list) {
+        arr.add(this.toJsonNode(elem));
+      }
+      return arr;
+    }
+    return this.factory.pojoNode(value);
   }
-
-  @Override
-  public <K, V> void setMap(String key, Map<K, V> value) {
-    this.set(key, value);
-  }
-
-  @Override
-  public void remove(String key) {
-    ObjectNode parent = this.ensureParentNode(key);
-    String last = this.lastPart(key);
-    parent.remove(last);
-  }
-
-  @Override
-  public Short getShort(String key) {
-    Object val = this.get(key);
-    return val != null ? Short.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setShort(String key, short value) {
-    this.set(key, value);
-  }
-
-
-  @Override
-  public Byte getByte(String key) {
-    Object val = this.get(key);
-    return val != null ? Byte.valueOf(val.toString()) : null;
-  }
-
-  @Override
-  public void setByte(String key, byte value) {
-    this.set(key, value);
-  }
-
 }
