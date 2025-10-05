@@ -6,6 +6,8 @@ public interface ConfigValue<T> {
 
   T get();
 
+  Class<T> type();
+
   void clear();
 
   @Override

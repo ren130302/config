@@ -7,14 +7,18 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * 抽象クラスとしての ConfigSource 基底。 生の値を返すだけで型変換は ConfigSource の default メソッドに任せる。 List/Set/Map など
+ * Collection 変換は安全に行う。
+ */
 public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
 
   protected final T source;
   protected final KeyPathResolver keyPathResolver;
 
   protected AbstractConfigSource(T source, KeyPathResolver resolver) {
-    this.source = Objects.requireNonNull(source, "source must not be null");
-    this.keyPathResolver = Objects.requireNonNull(resolver, "resolver must not be null");
+    this.source = source;
+    this.keyPathResolver = resolver;
   }
 
   @Override
@@ -23,76 +27,44 @@ public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
   }
 
   @Override
-  public KeyPathResolver keyPathResolver() {
-    return this.keyPathResolver;
+  public <V> V get(String key) {
+    return (V) this.getRaw(this.keyPathResolver.normalizeKey(key));
   }
 
-  protected String normalizeKey(String key) {
-    List<String> path = this.keyPathResolver.parse(key);
-    if (path.isEmpty()) {
-      throw new IllegalArgumentException("Invalid key path: " + key);
-    }
-    return this.keyPathResolver.join(path);
-  }
-
+  @Override
   @SuppressWarnings("unchecked")
-  protected <V> V getValue(String key, Class<V> type) {
-    Object value = this.getRaw(this.normalizeKey(key));
+  public <V> V get(String key, Class<V> type) {
+    Object value = this.getRaw(this.keyPathResolver.normalizeKey(key));
     if (value == null) {
       return null;
     }
-    if (!type.isInstance(value)) {
-      throw new ClassCastException("Expected type " + type.getSimpleName() + " but found "
-          + value.getClass().getSimpleName());
-    }
-    return (V) value;
-  }
-
-  @Override
-  public void set(String key, Object value) {
-    this.setRaw(this.normalizeKey(key), value);
-  }
-
-  @SuppressWarnings("unchecked")
-  @Override
-  public <V> V get(String key) {
-    return (V) this.getRaw(this.normalizeKey(key));
-  }
-
-  @Override
-  public <V> V get(String key, Class<V> type) {
-    Object raw = this.getRaw(this.normalizeKey(key));
-    if (raw == null) {
-      return null;
-    }
-    if (type.isInstance(raw)) {
-      return (V) raw;
+    if (type.isInstance(value)) {
+      return (V) value;
     }
 
-    String str = raw.toString();
     if (type == String.class) {
-      return (V) str;
+      return (V) this.getString(key);
     }
     if (type == Integer.class) {
-      return (V) Integer.valueOf(str);
+      return (V) Integer.valueOf(this.getInt(key));
     }
     if (type == Long.class) {
-      return (V) Long.valueOf(str);
-    }
-    if (type == Double.class) {
-      return (V) Double.valueOf(str);
-    }
-    if (type == Float.class) {
-      return (V) Float.valueOf(str);
+      return (V) Long.valueOf(this.getLong(key));
     }
     if (type == Boolean.class) {
-      return (V) Boolean.valueOf(str);
+      return (V) Boolean.valueOf(this.getBoolean(key));
     }
-    if (type == Byte.class) {
-      return (V) Byte.valueOf(str);
+    if (type == Double.class) {
+      return (V) Double.valueOf(this.getDouble(key));
+    }
+    if (type == Float.class) {
+      return (V) Float.valueOf(this.getFloat(key));
     }
     if (type == Short.class) {
-      return (V) Short.valueOf(str);
+      return (V) Short.valueOf(this.getShort(key));
+    }
+    if (type == Byte.class) {
+      return (V) Byte.valueOf(this.getByte(key));
     }
 
     throw new UnsupportedOperationException("Unsupported type: " + type.getSimpleName());
@@ -101,14 +73,28 @@ public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
   @Override
   @SuppressWarnings("unchecked")
   public <V> V get(String key, V defaultValue) {
-    V value =
-        (V) this.get(key, defaultValue != null ? (Class<V>) defaultValue.getClass() : Object.class);
+    V value;
+    if (defaultValue != null) {
+      value = this.get(key, (Class<V>) defaultValue.getClass());
+    } else {
+      value = (V) this.get(key);
+    }
     return value != null ? value : defaultValue;
   }
 
   @Override
+  public KeyPathResolver keyPathResolver() {
+    return this.keyPathResolver;
+  }
+
+  @Override
+  public void set(String key, Object value) {
+    this.setRaw(this.keyPathResolver.normalizeKey(key), value);
+  }
+
+  @Override
   public void remove(String key) {
-    this.setRaw(this.normalizeKey(key), null);
+    this.setRaw(this.keyPathResolver.normalizeKey(key), null);
   }
 
   @Override
@@ -120,19 +106,24 @@ public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
 
   @Override
   public boolean containsKey(String key) {
-    return this.keys().contains(this.normalizeKey(key));
+    return this.keys().contains(this.keyPathResolver.normalizeKey(key));
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <E> List<E> getList(String key, Class<E> elementType) {
-    Object raw = this.getRaw(this.normalizeKey(key));
+    Object raw = this.getRaw(this.keyPathResolver.normalizeKey(key));
     if (raw == null) {
       return List.of();
     }
-    if (!(raw instanceof Collection<?> collection)) {
-      throw new ClassCastException("Expected List but found " + raw.getClass().getSimpleName());
+
+    if (raw instanceof Collection<?> collection) {
+      return collection.stream().filter(Objects::nonNull).map(elementType::cast)
+          .collect(Collectors.toList());
     }
-    return collection.stream().map(elementType::cast).collect(Collectors.toList());
+
+    throw new ClassCastException(
+        "Expected List/Collection but found " + raw.getClass().getSimpleName());
   }
 
   @Override
@@ -141,15 +132,20 @@ public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <E> Set<E> getSet(String key, Class<E> elementType) {
-    Object raw = this.getRaw(this.normalizeKey(key));
+    Object raw = this.getRaw(this.keyPathResolver.normalizeKey(key));
     if (raw == null) {
       return Set.of();
     }
-    if (!(raw instanceof Collection<?> collection)) {
-      throw new ClassCastException("Expected Set but found " + raw.getClass().getSimpleName());
+
+    if (raw instanceof Collection<?> collection) {
+      return collection.stream().filter(Objects::nonNull).map(elementType::cast)
+          .collect(Collectors.toSet());
     }
-    return collection.stream().map(elementType::cast).collect(Collectors.toSet());
+
+    throw new ClassCastException(
+        "Expected Set/Collection but found " + raw.getClass().getSimpleName());
   }
 
   @Override
@@ -158,16 +154,19 @@ public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <K, V> Map<K, V> getMap(String key, Class<K> keyType, Class<V> valueType) {
-    Object raw = this.getRaw(this.normalizeKey(key));
+    Object raw = this.getRaw(this.keyPathResolver.normalizeKey(key));
     if (raw == null) {
       return Map.of();
     }
-    if (!(raw instanceof Map<?, ?> map)) {
-      throw new ClassCastException("Expected Map but found " + raw.getClass().getSimpleName());
+
+    if (raw instanceof Map<?, ?> map) {
+      return map.entrySet().stream().collect(
+          Collectors.toMap(e -> keyType.cast(e.getKey()), e -> valueType.cast(e.getValue())));
     }
-    return map.entrySet().stream().collect(
-        Collectors.toMap(e -> keyType.cast(e.getKey()), e -> valueType.cast(e.getValue())));
+
+    throw new ClassCastException("Expected Map but found " + raw.getClass().getSimpleName());
   }
 
   @Override
@@ -183,4 +182,7 @@ public abstract class AbstractConfigSource<T> implements ConfigSource<T> {
 
   @Override
   public abstract void setRaw(String key, Object value);
+
+  @Override
+  public abstract Set<String> keys();
 }

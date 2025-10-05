@@ -5,8 +5,8 @@ import config.source.ConfigSource;
 final class MutableRequiredConfigValue<T> extends AbstractRequiredConfigValue<T>
     implements Mutable<T> {
 
-  MutableRequiredConfigValue(ConfigSource<?> source, String key) {
-    super(source, key);
+  MutableRequiredConfigValue(ConfigSource<?> source, String key, Class<T> type) {
+    super(source, key, type);
   }
 
   @Override

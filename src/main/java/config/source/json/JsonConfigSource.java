@@ -1,22 +1,21 @@
 package config.source.json;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import config.source.AbstractConfigSource;
 import config.source.KeyPathResolvers;
 
 public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
 
-  private final JsonNodeFactory factory = JsonNodeFactory.instance;
+  private final ObjectMapper mapper = new ObjectMapper();
 
   public JsonConfigSource(ObjectNode root) {
     super(root, KeyPathResolvers.DOT);
@@ -24,7 +23,7 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
 
   @Override
   public Object getRaw(String key) {
-    JsonNode node = this.getNodeByPath(this.normalizeKey(key));
+    JsonNode node = this.getNodeByPath(this.keyPathResolver.normalizeKey(key));
     return this.convertJsonNode(node);
   }
 
@@ -36,14 +35,14 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
 
   @Override
   public void setRaw(String key, Object value) {
-    String normalized = this.normalizeKey(key);
+    String normalized = this.keyPathResolver.normalizeKey(key);
     String[] parts = normalized.split("\\.");
     ObjectNode current = this.source;
 
     for (int i = 0; i < parts.length - 1; i++) {
       JsonNode child = current.get(parts[i]);
-      if (child == null || !child.isObject()) {
-        ObjectNode newNode = this.factory.objectNode();
+      if (!(child instanceof ObjectNode)) {
+        ObjectNode newNode = this.mapper.createObjectNode();
         current.set(parts[i], newNode);
         current = newNode;
       } else {
@@ -55,7 +54,7 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
     if (value == null) {
       current.remove(last);
     } else {
-      current.set(last, this.toJsonNode(value));
+      current.set(last, this.mapper.valueToTree(value));
     }
   }
 
@@ -64,11 +63,11 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
     return this.collectKeys("", this.source);
   }
 
+  // ----------------- ヘルパーメソッド -----------------
+
   private Set<String> collectKeys(String prefix, ObjectNode node) {
     Set<String> result = new LinkedHashSet<>();
-    Iterator<Map.Entry<String, JsonNode>> iter = node.fields();
-    while (iter.hasNext()) {
-      Map.Entry<String, JsonNode> entry = iter.next();
+    node.fields().forEachRemaining(entry -> {
       String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
       JsonNode child = entry.getValue();
       if (child.isObject()) {
@@ -86,7 +85,7 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
       } else {
         result.add(key);
       }
-    }
+    });
     return result;
   }
 
@@ -134,9 +133,7 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
     }
     if (node.isArray()) {
       List<Object> list = new ArrayList<>();
-      for (JsonNode elem : node) {
-        list.add(this.convertJsonNode(elem));
-      }
+      node.forEach(elem -> list.add(this.convertJsonNode(elem)));
       return list;
     }
     if (node.isObject()) {
@@ -145,42 +142,5 @@ public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
       return map;
     }
     return null;
-  }
-
-  private JsonNode toJsonNode(Object value) {
-    if (value == null) {
-      return this.factory.nullNode();
-    }
-    if (value instanceof String s) {
-      return this.factory.textNode(s);
-    }
-    if (value instanceof Integer i) {
-      return this.factory.numberNode(i);
-    }
-    if (value instanceof Long l) {
-      return this.factory.numberNode(l);
-    }
-    if (value instanceof Double d) {
-      return this.factory.numberNode(d);
-    }
-    if (value instanceof Float f) {
-      return this.factory.numberNode(f);
-    }
-    if (value instanceof Boolean b) {
-      return this.factory.booleanNode(b);
-    }
-    if (value instanceof Map<?, ?> map) {
-      ObjectNode node = this.factory.objectNode();
-      map.forEach((k, v) -> node.set(k.toString(), this.toJsonNode(v)));
-      return node;
-    }
-    if (value instanceof List<?> list) {
-      ArrayNode arr = this.factory.arrayNode();
-      for (Object elem : list) {
-        arr.add(this.toJsonNode(elem));
-      }
-      return arr;
-    }
-    return this.factory.pojoNode(value);
   }
 }

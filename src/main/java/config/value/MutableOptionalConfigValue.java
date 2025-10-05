@@ -6,8 +6,8 @@ import config.source.ConfigSource;
 final class MutableOptionalConfigValue<T> extends AbstractOptionalConfigValue<T>
     implements Mutable<T> {
 
-  MutableOptionalConfigValue(ConfigSource<?> source, String key) {
-    super(source, key);
+  MutableOptionalConfigValue(ConfigSource<?> source, String key, Class<Optional<T>> type) {
+    super(source, key, type);
   }
 
   @Override

@@ -5,8 +5,8 @@ import config.source.ConfigSource;
 abstract class AbstractRequiredConfigValue<T> extends AbstractConfigValue<T>
     implements RequiredConfigValue<T> {
 
-  protected AbstractRequiredConfigValue(ConfigSource<?> source, String key) {
-    super(source, key);
+  protected AbstractRequiredConfigValue(ConfigSource<?> source, String key, Class<T> type) {
+    super(source, key, type);
   }
 
   @SuppressWarnings("unchecked")

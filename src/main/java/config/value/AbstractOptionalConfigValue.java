@@ -6,8 +6,9 @@ import config.source.ConfigSource;
 abstract class AbstractOptionalConfigValue<T> extends AbstractConfigValue<Optional<T>>
     implements OptionalConfigValue<T> {
 
-  protected AbstractOptionalConfigValue(ConfigSource<?> source, String key) {
-    super(source, key);
+  protected AbstractOptionalConfigValue(ConfigSource<?> source, String key,
+      Class<Optional<T>> type) {
+    super(source, key, type);
   }
 
   @SuppressWarnings("unchecked")
