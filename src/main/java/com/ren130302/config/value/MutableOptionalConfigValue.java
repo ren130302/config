@@ -1,7 +1,7 @@
-package config.value;
+package com.ren130302.config.value;
 
 import java.util.Optional;
-import config.source.ConfigSource;
+import com.ren130302.config.source.ConfigSource;
 
 final class MutableOptionalConfigValue<T> extends AbstractOptionalConfigValue<T>
     implements Mutable<T> {

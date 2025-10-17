@@ -1,4 +1,4 @@
-package config.source.properties;
+package com.ren130302.config.source.properties;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -7,12 +7,12 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
-import config.source.AbstractConfigSource;
+import com.ren130302.config.source.AbstractConfigSource;
 
 public class PropertiesConfigSource extends AbstractConfigSource<Properties> {
 
   public PropertiesConfigSource(Properties properties) {
-    super(properties, config.source.KeyPathResolvers.DOT);
+    super(properties, com.ren130302.config.source.KeyPathResolvers.DOT);
   }
 
   @Override

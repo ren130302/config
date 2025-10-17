@@ -1,4 +1,4 @@
-package config.value;
+package com.ren130302.config.value;
 
 public interface Mutable<T> {
 

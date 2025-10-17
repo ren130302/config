@@ -1,6 +1,6 @@
-package config.value;
+package com.ren130302.config.value;
 
-import config.source.ConfigSource;
+import com.ren130302.config.source.ConfigSource;
 
 abstract class AbstractRequiredConfigValue<T> extends AbstractConfigValue<T>
     implements RequiredConfigValue<T> {

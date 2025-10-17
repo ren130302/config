@@ -1,4 +1,4 @@
-package config.source.json;
+package com.ren130302.config.source.json;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -10,8 +10,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import config.source.AbstractConfigSource;
-import config.source.KeyPathResolvers;
+import com.ren130302.config.source.AbstractConfigSource;
+import com.ren130302.config.source.KeyPathResolvers;
 
 public class JsonConfigSource extends AbstractConfigSource<ObjectNode> {
 

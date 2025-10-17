@@ -12,8 +12,9 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import config.source.json.JsonConfigSource;
-import config.source.properties.PropertiesConfigSource;
+import com.ren130302.config.source.ConfigSource;
+import com.ren130302.config.source.json.JsonConfigSource;
+import com.ren130302.config.source.properties.PropertiesConfigSource;
 
 @SuppressWarnings("unchecked")
 public class ConfigFileReadTest {

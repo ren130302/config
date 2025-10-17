@@ -8,9 +8,9 @@ import java.util.Map;
 import java.util.Properties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import config.source.MapConfigSource;
-import config.source.json.JsonConfigSource;
-import config.source.properties.PropertiesConfigSource;
+import com.ren130302.config.source.MapConfigSource;
+import com.ren130302.config.source.json.JsonConfigSource;
+import com.ren130302.config.source.properties.PropertiesConfigSource;
 
 public final class MultiFormatConfig {
 

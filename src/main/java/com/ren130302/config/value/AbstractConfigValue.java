@@ -1,11 +1,11 @@
-package config.value;
+package com.ren130302.config.value;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import config.source.ConfigSource;
+import com.ren130302.config.source.ConfigSource;
 
 abstract class AbstractConfigValue<T> implements ConfigValue<T> {
 
